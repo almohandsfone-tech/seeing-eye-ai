@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Eye, 
   FileText, 
@@ -35,6 +35,19 @@ const Index = () => {
   const [showCamera, setShowCamera] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [largeText, setLargeText] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(true);
+
+  // Auto-start voice mode on mobile
+  useEffect(() => {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      setIsVoiceMode(true);
+      // Auto-start listening after a brief delay
+      setTimeout(() => {
+        setIsListening(true);
+      }, 1500);
+    }
+  }, []);
 
   const features = [
     {
@@ -153,9 +166,9 @@ const Index = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-background ${largeText ? 'large-text' : ''}`} dir="rtl">
+    <div className={`mobile-viewport bg-background ${largeText ? 'large-text' : ''} ${highContrast ? 'high-contrast' : ''}`} dir="rtl">
       {/* Header */}
-      <header className="bg-gradient-hero text-white p-6 shadow-lg">
+      <header className="bg-gradient-hero text-white p-4 md:p-6 shadow-lg safe-area-top">
         <div className="max-w-4xl mx-auto">
           <div className="flex justify-between items-center mb-4">
             <div className="flex gap-2">
@@ -189,13 +202,16 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 space-y-8">
-        {/* Voice Assistant */}
-        <VoiceAssistant
-          onVoiceCommand={handleVoiceCommand}
-          isListening={isListening}
-          onToggleListening={() => setIsListening(!isListening)}
-        />
+      <main className="max-w-4xl mx-auto p-4 md:p-6 space-y-6 md:space-y-8">
+        {/* Voice Assistant - Always prominent on mobile */}
+        <div className="sticky top-4 z-10">
+          <VoiceAssistant
+            onVoiceCommand={handleVoiceCommand}
+            isListening={isListening}
+            onToggleListening={() => setIsListening(!isListening)}
+            className={`${isListening ? 'voice-listening' : ''}`}
+          />
+        </div>
 
         {/* Features Grid */}
         {!showCamera && (
@@ -274,7 +290,7 @@ const Index = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-muted/30 text-center p-6 mt-12">
+      <footer className="bg-muted/30 text-center p-4 md:p-6 mt-8 md:mt-12 safe-area-bottom">
         <div className="space-y-2">
           <p className="text-sm font-medium">عينٌ لي - أراك من أجلك</p>
           <p className="text-xs text-muted-foreground">

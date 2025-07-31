@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Smartphone, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useVoiceFirst } from '@/hooks/useVoiceFirst';
 
 interface VoiceAssistantProps {
   onVoiceCommand: (command: string) => void;
@@ -17,83 +19,28 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   onToggleListening,
   className
 }) => {
-  const [transcript, setTranscript] = useState('');
-  const [isSupported, setIsSupported] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const voiceFirst = useVoiceFirst({ 
+    autoStart: true, 
+    wakeWord: 'عين',
+    continuousListening: false 
+  });
+  
+  // Use voice-first hook for enhanced mobile experience
+  const [quickCommandMode, setQuickCommandMode] = useState(false);
 
+  // Enhanced voice command processing
   useEffect(() => {
-    // Check if speech recognition is supported
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      setIsSupported(true);
-      
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'ar-SA'; // Arabic Saudi Arabia, can be switched to 'en-US'
-
-      recognition.onresult = (event) => {
-        let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          }
-        }
-        
-        if (finalTranscript) {
-          setTranscript(finalTranscript);
-          onVoiceCommand(finalTranscript);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-      };
-
-      recognitionRef.current = recognition;
+    if (voiceFirst.transcript) {
+      onVoiceCommand(voiceFirst.transcript);
+      voiceFirst.setTranscript('');
     }
+  }, [voiceFirst.transcript, onVoiceCommand]);
 
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    };
-  }, [onVoiceCommand]);
-
-  useEffect(() => {
-    if (recognitionRef.current) {
-      if (isListening) {
-        recognitionRef.current.start();
-      } else {
-        recognitionRef.current.stop();
-      }
-    }
-  }, [isListening]);
-
-  const speak = (text: string, lang: string = 'ar-SA') => {
-    if ('speechSynthesis' in window) {
-      // Stop any ongoing speech
-      speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      utterance.rate = 0.9;
-      utterance.volume = 1;
-      
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      
-      speechSynthesis.speak(utterance);
-    }
-  };
-
-  const stopSpeaking = () => {
-    if ('speechSynthesis' in window) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
+  // Quick command shortcuts for mobile
+  const handleQuickCommand = (command: string) => {
+    voiceFirst.speak(`تنفيذ ${command}`);
+    onVoiceCommand(command);
+    setQuickCommandMode(false);
   };
 
   const commonCommands = [
@@ -103,7 +50,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     { ar: 'ألوان الملابس', en: 'Clothing colors', command: 'color_advisor' },
   ];
 
-  if (!isSupported) {
+  if (!voiceFirst.isSupported) {
     return (
       <Card className={cn("p-6 text-center", className)}>
         <MicOff className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
@@ -116,102 +63,141 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   }
 
   return (
-    <Card className={cn("overflow-hidden bg-gradient-card backdrop-blur-sm", className)}>
-      <div className="p-4 bg-gradient-secondary text-secondary-foreground">
-        <h2 className="text-lg font-semibold text-center">
-          المساعد الصوتي - Voice Assistant
-        </h2>
+    <Card className={cn("overflow-hidden bg-gradient-card backdrop-blur-sm border-2 border-primary/20", className)}>
+      <div className="p-3 md:p-4 bg-gradient-secondary text-secondary-foreground">
+        <div className="flex items-center justify-center gap-2">
+          <Smartphone className="h-5 w-5" />
+          <h2 className="text-base md:text-lg font-semibold text-center">
+            المساعد الصوتي - Voice Assistant
+          </h2>
+          <Badge variant="secondary" className="text-xs">
+            <Zap className="h-3 w-3 mr-1" />
+            صوت أولاً
+          </Badge>
+        </div>
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         {/* Main Voice Control */}
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-3 md:space-y-4">
           <div className="relative">
             <Button
-              onClick={onToggleListening}
+              onClick={() => {
+                if (voiceFirst.isListening) {
+                  voiceFirst.stopListening();
+                } else {
+                  voiceFirst.startListening();
+                }
+                onToggleListening();
+              }}
               size="lg"
-              variant={isListening ? "destructive" : "default"}
+              variant={voiceFirst.isListening ? "destructive" : "default"}
               className={cn(
-                "h-20 w-20 rounded-full text-2xl transition-all duration-300",
-                isListening 
-                  ? "bg-destructive hover:bg-destructive/90 animate-pulse shadow-glow" 
-                  : "bg-gradient-primary hover:shadow-glow"
+                "h-24 w-24 md:h-20 md:w-20 rounded-full text-2xl transition-all duration-300 shadow-lg",
+                voiceFirst.isListening 
+                  ? "bg-destructive hover:bg-destructive/90 animate-pulse shadow-glow scale-110" 
+                  : "bg-gradient-primary hover:shadow-glow active:scale-95"
               )}
             >
-              {isListening ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+              {voiceFirst.isListening ? <MicOff className="h-10 w-10 md:h-8 md:w-8" /> : <Mic className="h-10 w-10 md:h-8 md:w-8" />}
             </Button>
             
-            {isListening && (
-              <div className="absolute inset-0 rounded-full border-4 border-destructive/30 animate-ping" />
+            {voiceFirst.isListening && (
+              <>
+                <div className="absolute inset-0 rounded-full border-4 border-destructive/30 animate-ping" />
+                <div className="absolute inset-0 rounded-full border-2 border-destructive/50 animate-pulse" />
+              </>
             )}
           </div>
 
           <div className="space-y-2">
-            <p className="text-lg font-medium">
-              {isListening ? 'أنا أستمع...' : 'اضغط للتحدث'}
+            <p className="text-lg md:text-xl font-medium">
+              {voiceFirst.isListening ? 'أنا أستمع...' : 'اضغط للتحدث'}
             </p>
-            <p className="text-sm text-muted-foreground">
-              {isListening ? 'Listening...' : 'Tap to speak'}
+            <p className="text-sm md:text-base text-muted-foreground">
+              {voiceFirst.isListening ? 'Listening...' : 'Tap to speak'}
             </p>
+            {voiceFirst.isListening && (
+              <p className="text-xs text-primary animate-pulse">
+                قل "عين" لإيقاظ المساعد | Say "عين" to wake assistant
+              </p>
+            )}
           </div>
 
-          {transcript && (
-            <div className="p-4 bg-muted rounded-lg">
+          {voiceFirst.transcript && (
+            <div className="p-3 md:p-4 bg-muted rounded-lg slide-up">
               <p className="text-sm text-muted-foreground mb-1">آخر أمر:</p>
-              <p className="font-medium">{transcript}</p>
+              <p className="font-medium text-sm md:text-base">{voiceFirst.transcript}</p>
             </div>
           )}
         </div>
 
-        {/* Speech Controls */}
-        <div className="flex justify-center gap-4">
+        {/* Enhanced Mobile Controls */}
+        <div className="grid grid-cols-2 gap-3">
           <Button
-            onClick={stopSpeaking}
+            onClick={voiceFirst.stopSpeaking}
             variant="outline"
-            disabled={!isSpeaking}
-            className="flex-1 max-w-32"
+            disabled={!voiceFirst.isSpeaking}
+            className="h-12 text-sm font-medium"
           >
             <VolumeX className="mr-2 h-4 w-4" />
-            إيقاف
+            إيقاف الصوت
           </Button>
           <Button
-            onClick={() => speak('مرحبا، أنا مساعدك الصوتي. كيف يمكنني مساعدتك؟')}
+            onClick={() => voiceFirst.speak('مرحبا، أنا عينك الذكية. كيف يمكنني مساعدتك؟')}
             variant="outline"
-            disabled={isSpeaking}
-            className="flex-1 max-w-32"
+            disabled={voiceFirst.isSpeaking}
+            className="h-12 text-sm font-medium"
           >
             <Volume2 className="mr-2 h-4 w-4" />
-            اختبار
+            اختبار الصوت
           </Button>
         </div>
 
-        {/* Quick Commands */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-center">أوامر سريعة - Quick Commands</h3>
-          <div className="grid grid-cols-1 gap-2">
-            {commonCommands.map((cmd, index) => (
-              <Button
-                key={index}
-                variant="ghost"
-                className="justify-start text-right h-auto p-3 hover:bg-muted/50"
-                onClick={() => onVoiceCommand(cmd.command)}
-              >
-                <div className="w-full text-right space-y-1">
-                  <p className="text-sm font-medium">{cmd.ar}</p>
-                  <p className="text-xs text-muted-foreground">{cmd.en}</p>
-                </div>
-              </Button>
-            ))}
-          </div>
+        {/* Quick Action Mode Toggle */}
+        <div className="text-center">
+          <Button
+            onClick={() => setQuickCommandMode(!quickCommandMode)}
+            variant="ghost"
+            className="text-xs text-muted-foreground hover:text-primary"
+          >
+            {quickCommandMode ? 'إخفاء الأوامر السريعة' : 'إظهار الأوامر السريعة'}
+          </Button>
         </div>
 
-        {/* Usage Tips */}
-        <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-          <h4 className="text-sm font-medium mb-2">نصائح الاستخدام:</h4>
+        {/* Quick Commands - Mobile Optimized */}
+        {quickCommandMode && (
+          <div className="space-y-3 slide-up">
+            <h3 className="text-sm font-medium text-center">أوامر سريعة - Quick Commands</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {commonCommands.map((cmd, index) => (
+                <Button
+                  key={index}
+                  variant="ghost"
+                  className="h-16 p-2 text-center hover:bg-muted/50 border border-muted"
+                  onClick={() => handleQuickCommand(cmd.command)}
+                >
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium leading-tight">{cmd.ar}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">{cmd.en}</p>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Usage Tips */}
+        <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+          <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+            <Smartphone className="h-4 w-4" />
+            نصائح للجوال:
+          </h4>
           <ul className="text-xs space-y-1 text-muted-foreground">
-            <li>• تحدث بوضوح وببطء</li>
-            <li>• استخدم الأوامر المعروضة أعلاه</li>
-            <li>• يمكنك التبديل بين العربية والإنجليزية</li>
+            <li>• اضغط مطولاً للاستمرار في الاستماع</li>
+            <li>• قل "عين" لإيقاظ المساعد</li>
+            <li>• استخدم الأوامر السريعة للوصول المباشر</li>
+            <li>• التطبيق يدعم الاهتزاز للتأكيد</li>
           </ul>
         </div>
       </div>
